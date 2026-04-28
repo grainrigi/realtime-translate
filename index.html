@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-time Translation (EN → JA)</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #1a1a2e;
+            color: #eee;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        header {
+            padding: 16px 24px;
+            background: #16213e;
+            border-bottom: 1px solid #0f3460;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        header h1 {
+            font-size: 1.2em;
+            font-weight: 600;
+            color: #e2e2e2;
+        }
+
+        #status {
+            font-size: 0.85em;
+            padding: 4px 12px;
+            border-radius: 12px;
+            background: #e74c3c;
+            color: white;
+        }
+
+        #status.connected {
+            background: #27ae60;
+        }
+
+        #messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .message {
+            padding: 14px 18px;
+            border-radius: 10px;
+            background: #16213e;
+            border-left: 4px solid #0f3460;
+            transition: all 0.2s ease;
+        }
+
+        .message.active {
+            border-left-color: #27ae60;
+            background: #1a2740;
+        }
+
+        .message.active::after {
+            content: "";
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            background: #27ae60;
+            border-radius: 50%;
+            margin-left: 8px;
+            animation: pulse 1.2s infinite;
+            vertical-align: middle;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+
+        .message .original {
+            font-size: 0.85em;
+            color: #8899aa;
+            margin-bottom: 6px;
+            line-height: 1.4;
+        }
+
+        .message .translated {
+            font-size: 1.15em;
+            color: #f0f0f0;
+            line-height: 1.5;
+        }
+
+        .empty-state {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #556;
+            font-size: 1.1em;
+        }
+
+        #messages:empty::before {
+            content: "Waiting for speech...";
+            color: #556;
+            font-size: 1.1em;
+            align-self: center;
+            margin-top: 40vh;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Real-time Translation — EN → JA</h1>
+        <span id="status">Disconnected</span>
+    </header>
+    <div id="messages"></div>
+
+    <script>
+        const messagesDiv = document.getElementById("messages");
+        const statusEl = document.getElementById("status");
+
+        function connect() {
+            const ws = new WebSocket(`ws://${location.host}/ws`);
+
+            ws.onopen = () => {
+                statusEl.textContent = "Connected";
+                statusEl.classList.add("connected");
+            };
+
+            ws.onclose = () => {
+                statusEl.textContent = "Disconnected";
+                statusEl.classList.remove("connected");
+                setTimeout(connect, 2000);
+            };
+
+            ws.onerror = () => {
+                ws.close();
+            };
+
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                const { type, message_id, original, translated } = data;
+
+                let el = document.getElementById(`msg-${message_id}`);
+
+                if (!el) {
+                    el = document.createElement("div");
+                    el.id = `msg-${message_id}`;
+                    el.className = "message active";
+                    el.innerHTML = `
+                        <div class="original"></div>
+                        <div class="translated"></div>
+                    `;
+                    messagesDiv.appendChild(el);
+                }
+
+                el.querySelector(".original").textContent = original;
+                el.querySelector(".translated").textContent = translated;
+
+                if (type === "finalize") {
+                    el.classList.remove("active");
+                }
+
+                messagesDiv.scrollTop = messagesDiv.scrollHeight;
+            };
+        }
+
+        connect();
+    </script>
+</body>
+</html>
